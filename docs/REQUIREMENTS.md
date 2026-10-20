@@ -2,219 +2,254 @@
 
 | | |
 | --- | --- |
-| **Product name** | Expense Tracker |
-| **Document version** | 1.0 |
+| **Product family** | Expense Tracker — REST API, Android client, legacy CLI |
+| **Document version** | 2.0 |
 | **Date** | 2026-10-20 |
-| **Status** | Approved for development (Phases 0–1 delivered) |
+| **Status** | Approved — re-baseline for platform architecture |
 | **Companion document** | [Implementation Plan](./IMPLEMENTATION_PLAN.md) |
+
+## Revision history
+
+| Version | Date | Change |
+| --- | --- | --- |
+| 1.0 | 2026-10-20 | Initial SRS: zero-dependency Node.js CLI storing expenses and income in a Markdown file. Phases 0–1 delivered. |
+| 2.0 | 2026-10-20 | Re-baseline to a platform architecture: ASP.NET Core 8 + PostgreSQL backend and a React Native (Android) client. Web UI explicitly excluded. Legacy CLI moves to maintenance mode; v1 Phases 2–4 are superseded by platform Phases 5–9. Domain rules (validation, summaries, budgets, recurring) are carried forward and re-specified below. |
 
 ## 1. Introduction
 
 ### 1.1 Purpose
 
-This document specifies the functional and non-functional requirements for the
-Expense Tracker, a personal-finance tool that records expenses and income in a
-single, human-readable Markdown file. It is the authoritative reference for
+This document specifies the functional and non-functional requirements for
+the Expense Tracker platform: a REST backend (ASP.NET Core 8 on PostgreSQL)
+and a React Native Android client. It is the authoritative reference for
 scope, priorities, and acceptance criteria. The companion
-[Implementation Plan](./IMPLEMENTATION_PLAN.md) maps these requirements to
+[Implementation Plan](./IMPLEMENTATION_PLAN.md) maps requirements to
 delivery phases.
 
 ### 1.2 Scope
 
-The product is a zero-dependency command-line application that:
+The platform comprises:
 
-- Records **expenses** and **income** (salary, freelance, bonuses, refunds, etc.)
-  through an interactive, question-driven flow or through scriptable commands.
-- Persists all data in a **Markdown file** (`expenses.md`) that is legible by
-  humans, renders on GitHub, and can be safely edited by hand.
-- Maintains a **live summary** (total income, total expenses, net balance,
-  current-month totals, and spending-by-category breakdown) that is regenerated
-  on every write.
+1. **REST API** — authentication, transaction, category, budget, recurring,
+   and reporting services backed by PostgreSQL.
+2. **Android client** — React Native application providing guided
+   question-driven entry, lists, and summaries.
+3. **Legacy CLI (maintenance mode)** — the delivered Markdown CLI remains
+   functional; its data migrates to the platform via a Markdown import
+   (FR-280/281). No new CLI features are planned.
+4. **Markdown exchange format** — retained as an export/backup format
+   (FR-280), preserving the product's plain-text data-ownership story.
+
+A **web UI is explicitly out of scope** (stakeholder decision, 2026-10-20).
 
 ### 1.3 Definitions, acronyms, and abbreviations
 
 | Term | Meaning |
 | --- | --- |
-| Transaction | A single recorded financial event; either an expense or income |
-| Entry | Synonym for transaction |
-| Data file | The Markdown file acting as the application's persistent store |
-| ID | Stable unique identifier of a transaction (`exp-NNNN` / `inc-NNNN`) |
-| Cents | Internal integer representation of money (1 unit = 100 cents) |
-| CLI | Command-line interface |
-| SRS | Software Requirements Specification |
+| API | The ASP.NET Core REST backend |
+| Client | The React Native Android application |
+| Transaction | A recorded financial event; an expense or an income |
+| Data file | Markdown file in the v1 CLI format (import/export exchange format) |
+| JWT | JSON Web Token (bearer authentication) |
+| EF Core / Npgsql | ORM and PostgreSQL provider used by the API |
+| MoSCoW | Priority scale: Must / Should / Could / Won't |
 
 ### 1.4 Overview
 
-Section 2 describes the product context and users. Section 3 lists the
-functional requirements. Section 4 lists the non-functional requirements.
-Section 5 specifies the data format. Section 6 lists explicit exclusions.
+Section 2 describes architecture and users; Section 3 the functional
+requirements; Section 4 the non-functional requirements; Section 5 the data
+model; Section 6 explicit exclusions; Section 7 traceability to v1.
 
-## 2. Product overview
+## 2. System overview
 
-### 2.1 Product perspective
+### 2.1 Architecture
 
-The Expense Tracker is a self-contained Node.js CLI (≥ 18) with no runtime
-dependencies. It runs on Linux, macOS, and Windows from the repository checkout
-or after `npm link`. All state lives in one Markdown file, so the product fits
-naturally into Git-based workflows, plain-text backups, and version diffing.
+```mermaid
+flowchart LR
+  A[React Native client<br/>(Android)] -->|HTTPS, JSON, JWT| B[ASP.NET Core 8<br/>REST API]
+  B --> C[(PostgreSQL 16<br/>via EF Core / Npgsql)]
+  D[Legacy CLI<br/>(maintenance)] -->|Markdown import / export| B
+```
 
-### 2.2 User characteristics
+The server is the single source of truth. Clients are stateless with respect
+to authoritative data; any offline capability (FR-304) syncs back to the API.
+
+### 2.2 Component lifecycle
+
+| Component | Status |
+| --- | --- |
+| REST API + PostgreSQL | Planned (Phases 5–6) |
+| React Native Android client | Planned (Phase 7) |
+| Budgets, recurring, insights | Planned (Phase 8) |
+| Legacy CLI | Delivered, maintenance mode |
+
+### 2.3 Stakeholders and personas
 
 | Persona | Description | Primary needs |
 | --- | --- | --- |
-| **Personal user** | Wants a simple daily record of spending and earnings | Fast guided entry, clear summary, zero setup |
-| **Power user** | Comfortable with the terminal and scripting | Non-interactive commands, filters, stable IDs |
-| **Plain-text enthusiast** | Keeps notes and data in Markdown/Git | Human-editable file, predictable format, diff-friendly history |
+| **Mobile user** (primary) | Records spending and earnings on an Android phone | Fast guided entry, clear summary, works on the move |
+| **Power user** | Scripting and API access | Documented REST API, OpenAPI spec, tokens |
+| **Operator** | Runs the API and database | Deployment docs, backups, monitoring |
 
-### 2.3 Operating environment
+### 2.4 Operating environment
 
-- Node.js ≥ 18 on POSIX or Windows.
-- A writable filesystem location for the data file (default `./expenses.md`,
-  overridable via `--file` or the `EXPENSE_TRACKER_FILE` environment variable).
-- An interactive terminal (TTY) for the guided flows; the command set degrades
-  gracefully (with clear errors) when no TTY is present.
+- **Client:** Android 8.0 (API 26) or later.
+- **API:** ASP.NET Core 8 (LTS), Kestrel behind a TLS-terminating reverse
+  proxy, deployable via Docker.
+- **Database:** PostgreSQL 16.
 
-### 2.4 Constraints
+### 2.5 Constraints
 
-- **C-1** No third-party runtime dependencies.
-- **C-2** The data file must remain valid, human-readable Markdown at all times.
-- **C-3** Money values must be handled as integer cents to avoid
-  floating-point rounding errors.
-- **C-4** A single currency applies to the whole data file, configured at
-  initialization (`init --currency ISO-4217 code`).
+- **C-1** Backend: .NET 8 LTS with EF Core + Npgsql; no other ORM.
+- **C-2** Money: `decimal` in C# mapped to PostgreSQL `numeric(18,2)`;
+  floating-point types are prohibited for amounts.
+- **C-3** One currency per user account, configured in user settings.
+- **C-4** Android only for the client; no web UI this release.
+- **C-5** All client–server communication is JSON over HTTPS.
+- **C-6** UI language is English for this release.
 
-### 2.5 Assumptions and dependencies
+### 2.6 Assumptions and dependencies
 
-- **A-1** The data file is used by one user on one machine at a time.
-- **A-2** The user may hand-edit the data file between application runs; the
-  application must tolerate and preserve such edits (see FR-110 – FR-113).
-- **A-3** Locale formatting (currency symbol, grouping) is provided by the
-  JavaScript runtime's `Intl` implementation.
+- **A-1** The server is authoritative; multiple devices per account may sync.
+- **A-2** One account per person; accounts are not shared.
+- **A-3** Existing Markdown data (from the legacy CLI) is migrated once, in
+  Phase 6, and the Markdown file then becomes a backup/export artifact.
 
 ## 3. Functional requirements
 
-Priorities use MoSCoW (M = Must, S = Should, C = Could, W = Won't, this
-release). **Status** reflects the current implementation (Phases 0–1).
+Priorities use MoSCoW. Status reflects the re-baselined plan. Requirement IDs
+are new for v2; traceability to v1 IDs is in Section 7.
 
-### 3.1 Data entry — interactive
-
-| ID | Requirement | Priority | Status |
-| --- | --- | --- | --- |
-| FR-001 | The application shall provide an interactive menu with options to add an expense, add income, view transactions, show a summary, delete a transaction, and quit. | M | Delivered |
-| FR-002 | When adding a transaction, the application shall ask, in order: amount, category, description, date, and payment method, accepting Enter for documented defaults. | M | Delivered |
-| FR-003 | The date prompt shall accept `YYYY-MM-DD`, `today`, `yesterday`, or blank (default: today) and shall re-prompt with a clear message on invalid input. | M | Delivered |
-| FR-004 | The amount prompt shall re-prompt with a clear message on invalid input (non-numeric, negative, zero, or more than two decimal places). | M | Delivered |
-| FR-005 | The category prompt shall offer a numbered list of defaults and shall accept a typed custom category. | M | Delivered |
-| FR-006 | Before saving, the application shall show the assembled entry for confirmation and shall allow cancellation without writing. | M | Delivered |
-| FR-007 | Income entry shall offer distinct default categories (Salary, Bonus, Freelance, Business, Investments, Gifts, Refunds, Other) and a distinct default payment method (Bank transfer). | M | Delivered |
-
-### 3.2 Data entry — non-interactive
+### 3.1 Users and authentication
 
 | ID | Requirement | Priority | Status |
 | --- | --- | --- | --- |
-| FR-020 | The application shall support `add <expense\|income>` with `--amount`, `--category`, `--description`, `--date`, and `--method` flags. | M | Delivered |
-| FR-021 | When run non-interactively without `--amount`, the application shall fail with a clear error and a non-zero exit code. | M | Delivered |
-| FR-022 | `add <type>` without `--amount` on a TTY shall fall back to the interactive flow. | S | Delivered |
+| FR-200 | The API shall support account registration with email and password; passwords shall be stored only as salted hashes. | M | Planned (Phase 5) |
+| FR-201 | The API shall issue short-lived JWT access tokens on login and shall reject expired or invalid tokens. | M | Planned (Phase 5) |
+| FR-202 | All user data shall be isolated per account; no endpoint may return or modify another account's data. | M | Planned (Phase 5) |
+| FR-203 | The user shall be able to set their account currency (ISO-4217, default USD) and change it while no transactions exist. | S | Planned (Phase 5) |
 
-### 3.3 Storage and data integrity
-
-| ID | Requirement | Priority | Status |
-| --- | --- | --- | --- |
-| FR-040 | All transactions shall be persisted to a single Markdown data file containing an Expenses table and an Income table with columns ID, Date, Category, Description, Payment method, Amount. | M | Delivered |
-| FR-041 | Each transaction shall receive a stable, unique, human-typeable ID (`exp-NNNN` / `inc-NNNN`) that persists across runs. | M | Delivered |
-| FR-042 | Amounts shall be stored internally as integer cents and serialized with exactly two decimals. | M | Delivered |
-| FR-043 | The application shall assign IDs to hand-added rows that lack one and shall de-duplicate colliding IDs on load. | S | Delivered |
-| FR-044 | The data file shall escape pipes and newlines in free-text fields so tables remain structurally valid. | M | Delivered |
-| FR-045 | Invalid rows introduced by hand edits shall be skipped at load time with a warning rather than crashing the application. | M | Delivered |
-| FR-046 | Valid hand edits to existing rows (e.g. corrected amounts, added rows) shall be preserved. | M | Delivered |
-| FR-047 | The application shall not create or modify the data file when input validation fails. | M | Delivered |
-
-
-### 3.4 Retrieval and reporting
+### 3.2 Transactions and categories
 
 | ID | Requirement | Priority | Status |
 | --- | --- | --- | --- |
-| FR-060 | `list` shall display transactions (most recent first) with ID, date, type, category, description, method, and formatted amount. | M | Delivered |
-| FR-061 | `list` shall support filtering by month (`--month YYYY-MM`), by type (`--type expense\|income`), and limiting rows (`--limit N`). | M | Delivered |
-| FR-062 | `summary` shall report total income, total expenses, net balance, entry counts, and a spending-by-category breakdown with shares. | M | Delivered |
-| FR-063 | `summary` shall report all-time figures plus current-month figures by default, and figures for a given month with `--month`. | M | Delivered |
-| FR-064 | The data file itself shall contain a regenerated Summary section (totals, net balance, current month, category shares) after every write. | M | Delivered |
+| FR-220 | The API shall create transactions with type (expense/income), amount, date, category, description, and payment method. | M | Planned (Phase 6) |
+| FR-221 | The API shall validate amounts as positive numbers with at most two decimals and shall reject everything else with field-level errors. | M | Planned (Phase 6) |
+| FR-222 | The API shall validate dates as real calendar dates (`YYYY-MM-DD`) and shall reject invalid ones. | M | Planned (Phase 6) |
+| FR-223 | Categories shall be seeded per account (expense and income lists matching the legacy CLI defaults) and shall support user-created custom categories. | M | Planned (Phase 6) |
+| FR-224 | The API shall update an existing transaction by ID (supersedes v1 FR-120). | M | Planned (Phase 6) |
+| FR-225 | The API shall delete a transaction by ID. | M | Planned (Phase 6) |
+| FR-226 | The API shall list transactions with filters by month, type, and category, sorted most-recent-first, with paging (`limit`/`offset` or cursor). | M | Planned (Phase 6) |
+| FR-227 | Every transaction shall carry a stable server-assigned ID and created/updated timestamps. | M | Planned (Phase 6) |
+| FR-228 | The API shall expose an OpenAPI specification generated from code. | M | Planned (Phase 5) |
 
-### 3.5 Transaction management
-
-| ID | Requirement | Priority | Status |
-| --- | --- | --- | --- |
-| FR-080 | `delete <id>` shall remove a transaction by ID (case-insensitive); interactive delete shall confirm first. | M | Delivered |
-| FR-081 | Deleting an unknown ID shall fail with a clear error and a non-zero exit code. | M | Delivered |
-
-### 3.6 Configuration and help
+### 3.3 Summaries and reports
 
 | ID | Requirement | Priority | Status |
 | --- | --- | --- | --- |
-| FR-100 | `init` shall create an empty, valid data file and shall set or change the file currency without discarding existing data. | M | Delivered |
-| FR-101 | The currency shall be an ISO-4217-style three-letter code persisted in the data file; invalid codes shall be rejected. | M | Delivered |
-| FR-102 | The data-file location shall be settable via `--file <path>` or the `EXPENSE_TRACKER_FILE` environment variable. | M | Delivered |
-| FR-103 | `--help` and unknown commands shall print complete usage documentation; unknown commands shall exit non-zero. | M | Delivered |
+| FR-240 | The API shall report, for all time and for any requested month: total income, total expenses, net balance, entry counts, and a spending-by-category breakdown with shares. | M | Planned (Phase 6) |
+| FR-241 | The API shall provide a monthly series (income, expenses, net) for the last N months for trend display. | S | Planned (Phase 8) |
+| FR-242 | Summary responses shall include over-budget warnings for months with configured budgets. | S | Planned (Phase 8) |
 
-### 3.7 Planned capabilities (Phase 2+)
+### 3.4 Budgets and recurring transactions
 
 | ID | Requirement | Priority | Status |
 | --- | --- | --- | --- |
-| FR-120 | The application shall support editing an existing transaction by ID. | S | Planned (Phase 2) |
-| FR-121 | The application shall support monthly budgets per category and shall warn when a budget is exceeded. | S | Planned (Phase 2) |
-| FR-122 | The application shall support recurring transactions (e.g. a monthly salary) generated on demand. | S | Planned (Phase 2) |
-| FR-123 | The application shall import and export CSV. | C | Planned (Phase 2) |
-| FR-130 | The application shall provide trend reports (month-over-month income/expense deltas). | C | Planned (Phase 3) |
-| FR-131 | The application shall render category breakdown charts in the terminal. | C | Planned (Phase 3) |
-| FR-140 | A web UI shall be provided on top of the same Markdown data format. | W | Phase 4 (revisit) |
+| FR-260 | The user shall be able to set a monthly budget per expense category. | S | Planned (Phase 8) |
+| FR-261 | Summaries shall warn when a month's category spending exceeds its budget. | S | Planned (Phase 8) |
+| FR-262 | The user shall be able to define recurring transactions (e.g. monthly salary, rent) that are materialized on schedule by the API, exactly once per period. | S | Planned (Phase 8) |
+
+### 3.5 Data portability
+
+| ID | Requirement | Priority | Status |
+| --- | --- | --- | --- |
+| FR-280 | The API shall export a user's transactions in the established Markdown exchange format (v1 data-file layout). | M | Planned (Phase 6) |
+| FR-281 | The API shall import a v1 Markdown data file, migrating legacy CLI data; import shall be atomic (all rows or none) with a per-row error report. | M | Planned (Phase 6) |
+| FR-282 | The API shall export transactions as CSV. | C | Planned (Phase 8) |
+
+### 3.6 Android client (React Native)
+
+| ID | Requirement | Priority | Status |
+| --- | --- | --- | --- |
+| FR-300 | The client shall support account registration, login, and logout, storing tokens securely on-device. | M | Planned (Phase 7) |
+| FR-301 | The client shall provide a guided add-transaction flow asking, in order: amount, category (pick or custom), description, date (default: today), and payment method (default: Card / Bank transfer), then confirm before saving. | M | Planned (Phase 7) |
+| FR-302 | The client shall show a filterable transaction list (month, type) with amounts formatted in the account currency. | M | Planned (Phase 7) |
+| FR-303 | The client shall show a dashboard with monthly income, expenses, net, and spending-by-category breakdown. | M | Planned (Phase 7) |
+| FR-304 | The client shall queue entries captured offline and sync them to the API when connectivity returns, surfacing any rejected entries. | S | Planned (Phase 7) |
+| FR-305 | The client shall render monthly trend charts from FR-241 data. | C | Planned (Phase 8) |
+
+### 3.7 Legacy CLI (maintenance mode)
+
+| ID | Requirement | Priority | Status |
+| --- | --- | --- | --- |
+| FR-400 | The legacy CLI shall remain functional against the Markdown format (v1 FR-001–FR-103) and receive bug fixes only. | M | Delivered — maintained |
+| FR-401 | No new CLI features shall be developed; new capabilities land in the API/client. | M | Delivered — policy |
+
+### 3.8 Data integrity
+
+| ID | Requirement | Priority | Status |
+| --- | --- | --- | --- |
+| FR-320 | All domain validation rules of the legacy CLI (amount, date, type, category) shall be enforced server-side by the API. | M | Planned (Phase 6) |
+| FR-321 | Write endpoints shall be atomic: a validation failure or error must leave stored data unchanged (database transactions). | M | Planned (Phase 6) |
 
 
 ## 4. Non-functional requirements
 
 | ID | Requirement | Verification |
 | --- | --- | --- |
-| NFR-001 (Usability) | Every interactive prompt shall state its default and re-prompt with an actionable message on invalid input. | Manual review of each prompt |
-| NFR-002 (Performance) | Any command over a data file with up to 10,000 transactions shall complete within 1 second on commodity hardware. | Load test in Phase 3 |
-| NFR-003 (Reliability) | The application shall never write a structurally invalid Markdown file, and shall never lose valid data due to internal serialization. | Automated round-trip tests |
-| NFR-004 (Portability) | The application shall run on Node.js ≥ 18 across Linux, macOS, and Windows with no third-party dependencies. | CI matrix (Phase 4) |
-| NFR-005 (Maintainability) | Core logic (parsing, validation, summaries) shall be separated from CLI presentation and covered by automated tests. | `node --test` suite |
-| NFR-006 (Data safety) | All writes shall be atomic from the user's perspective: a failed validation, unknown ID, or parse error shall leave the file unchanged. | Automated negative tests |
-| NFR-007 (Transparency) | All stored data shall remain human-readable plain text with no binary or hidden state. | Inspection of the data file |
-| NFR-008 (Observability) | Hand-edit anomalies shall surface as warnings on the console, not silent failures. | Automated warning tests |
+| NFR-010 (Security) | Passwords shall be stored as salted hashes (ASP.NET Identity or Argon2id/bcrypt); no plaintext credentials in logs or storage. | Code review + auth tests |
+| NFR-011 (Security) | The API shall serve TLS only; plain HTTP shall be refused in production configuration. | Deployment checklist |
+| NFR-012 (Security) | Login and registration shall be rate-limited; OWASP API Top 10 checklist shall be signed off before release. | Pen-test checklist (Phase 9) |
+| NFR-013 (Security) | Secrets (connection strings, JWT signing key) shall come from environment/configuration, never source control. | Repository scanning |
+| NFR-020 (Performance) | Transaction CRUD endpoints shall meet P95 < 300 ms; summary/report endpoints P95 < 1 s with 10,000 transactions per account. | Load test (Phase 9) |
+| NFR-030 (Reliability) | Nightly PostgreSQL backups (pg_dump) shall exist, with a documented and rehearsed restore procedure. | Restore drill (Phase 9) |
+| NFR-040 (Portability) | The API shall run via Docker with a compose file for local development; the client shall run on Android 8.0+ devices and emulators. | CI + device test matrix |
+| NFR-050 (Maintainability) | Backend logic shall be separated from HTTP controllers; behavior shall be covered by xUnit tests including integration tests against real PostgreSQL (Testcontainers). | `dotnet test` suite |
+| NFR-051 (Maintainability) | API behavior shall be documented by an always-current OpenAPI spec; CI shall build and test on every push. | CI pipeline |
+| NFR-060 (Observability) | The API shall expose health checks and structured logs (Serilog) with request IDs. | Operations review |
+| NFR-070 (Usability) | Adding a transaction on the client shall take at most five interactions; every guided input shall state its default. | Manual UX review (Phase 7) |
+| NFR-080 (Data safety) | No endpoint write may be partially applied; imports follow all-or-nothing semantics (FR-281). | Integration tests |
 
-## 5. Data format specification
+## 5. Data model (summary)
 
-The data file is the single source of truth. Required structure:
+Logical model (physical design follows in Phase 5 migrations):
 
-1. A `# Expense Tracker` title and metadata bullets: `**Currency:**` (ISO-4217
-   code), `**Last updated:**` (write timestamp), `**Entries:**` (counts).
-2. A `## Summary` section regenerated by the application on every write
-   (users may read but should not rely on hand-written values here).
-3. A `### Spending by category (all time)` subsection listing each expense
-   category, its formatted total, and its share of expenses.
-4. A `## Expenses` section whose table columns are, in order:
-   `ID | Date | Category | Description | Payment method | Amount`.
-5. A `## Income` section with the same column layout.
-6. Dates are `YYYY-MM-DD`; amounts are positive with exactly two decimals;
-   pipes and newlines inside free text are escaped as `\|` and spaces.
+| Table | Key columns | Notes |
+| --- | --- | --- |
+| `users` | id, email, password_hash, currency, created_at | Currency: ISO-4217, default USD |
+| `categories` | id, user_id (nullable), name, kind (expense/income) | `user_id NULL` = global seed row |
+| `transactions` | id, user_id, type, date, amount numeric(18,2), category_id, description, payment_method, recurring_rule_id (nullable), created_at, updated_at | Index on (user_id, date) |
+| `recurring_rules` | id, user_id, type, amount, category_id, day_of_month, active | Materialized by scheduled job |
+| `budgets` | id, user_id, category_id, monthly_amount | One active budget per category |
 
-Additional rules: row order within tables is not significant (rows are sorted
-by date, then ID); IDs follow `exp-NNNN` (expenses) and `inc-NNNN` (income)
-with four-digit zero padding; sections with no entries hold a placeholder
-line (`_No expenses recorded yet._`).
+Rules: `amount` is always positive; sign is derived from `type`; money is
+`numeric(18,2)` / C# `decimal` only (C-2). Deleting a category with
+transactions is refused; budgets cascade only on user deletion.
 
-## 6. Out of scope (current release)
+## 6. Out of scope (v2)
 
-- Multi-user or concurrent access (see A-1).
-- Multi-currency conversion within one file.
+- **Web UI** — explicitly excluded by stakeholder decision (2026-10-20).
+- iOS client (Android first; revisit after v2.0).
+- New legacy-CLI features (FR-401).
 - Bank synchronization / open-banking import.
-- Encryption of the data file.
-- Mobile or desktop GUI applications (a web UI is re-evaluated in Phase 4).
+- Multi-currency conversion within one account.
+- Shared/household accounts and collaboration.
 
-## 7. Traceability
+## 7. Traceability to v1
 
-Every functional requirement above carries a stable ID. The
-[Implementation Plan](./IMPLEMENTATION_PLAN.md) references these IDs in each
-phase's scope and acceptance criteria, so delivered scope can be audited
-requirement-by-requirement.
+| v1 requirement(s) | v2 disposition |
+| --- | --- |
+| FR-001–FR-007 (interactive entry) | Re-specified as FR-301 (client guided flow) |
+| FR-020–FR-022 (non-interactive entry) | Superseded by API (FR-220); scripting via OpenAPI/tokens |
+| FR-040–FR-047 (Markdown persistence, IDs, integrity) | Superseded by FR-220–FR-227 + FR-320/321; Markdown retained as exchange format (FR-280/281) |
+| FR-060–FR-064 (list, summary, in-file summary) | Re-specified as FR-226, FR-240–FR-242, FR-303 |
+| FR-080/081 (delete) | Re-specified as FR-225 |
+| FR-100–FR-103 (init, currency, help) | Re-specified as FR-203, FR-228 |
+| FR-120 (edit) | Re-specified as FR-224 |
+| FR-121 (budgets) | Re-specified as FR-260/261 |
+| FR-122 (recurring) | Re-specified as FR-262 |
+| FR-123 (CSV) | Re-specified as FR-282 |
+| FR-130/131 (trends, charts) | Re-specified as FR-241, FR-305 |
+| FR-140 (web UI) | Explicitly out of scope (Section 6) |
+| NFR-001–NFR-008 | Carried forward: usability → NFR-070; integrity → FR-320/321, NFR-080; maintainability → NFR-050/051; portability → NFR-040 |
 

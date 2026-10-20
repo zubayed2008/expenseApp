@@ -2,196 +2,201 @@
 
 | | |
 | --- | --- |
-| **Document version** | 1.0 |
+| **Document version** | 2.0 |
 | **Date** | 2026-10-20 |
 | **Companion document** | [Requirements (SRS)](./REQUIREMENTS.md) |
-| **Delivery approach** | Incremental phases; each phase ships working, tested software |
+| **Delivery approach** | Two tracks; every phase ships working, tested software |
+
+## Revision history
+
+| Version | Date | Change |
+| --- | --- | --- |
+| 1.0 | 2026-10-20 | Five phases for the Node.js CLI / Markdown product (Phases 0–1 delivered). |
+| 2.0 | 2026-10-20 | Re-baseline for the platform architecture (ASP.NET Core 8 + PostgreSQL backend, React Native Android client, no web UI). CLI Phases 2–4 are superseded; the CLI enters maintenance (Track 1). New platform phases 5–9 (Track 2). |
 
 ## 1. Overview
 
-The plan delivers the Expense Tracker in five phases, ordered so that every
-phase ends in a usable product and later phases build on a stable core.
-Requirement IDs refer to the [SRS](./REQUIREMENTS.md).
+Delivery is organized in two tracks. Requirement IDs refer to the
+[SRS v2](./REQUIREMENTS.md).
 
-| Phase | Theme | Status |
-| --- | --- | --- |
-| Phase 0 | Foundation & tooling | ✅ Complete |
-| Phase 1 | MVP — core tracking & Markdown persistence | ✅ Complete |
-| Phase 2 | Data management & robustness | ⏳ Next |
-| Phase 3 | Insights, trends & scale | 🗓 Planned |
-| Phase 4 | Hardening, distribution & expansion | 🗓 Planned |
+| Track | Phase | Theme | Status |
+| --- | --- | --- | --- |
+| 1 — CLI | 0 | Foundation & tooling | ✅ Complete |
+| 1 — CLI | 1 | MVP — core tracking & Markdown persistence | ✅ Complete — maintenance mode |
+| 2 — Platform | 5 | Backend & database foundation | ⏳ Next |
+| 2 — Platform | 6 | Core API — transactions, summaries, Markdown migration | 🗓 Planned |
+| 2 — Platform | 7 | React Native Android client — MVP | 🗓 Planned |
+| 2 — Platform | 8 | Budgets, recurring transactions, insights | 🗓 Planned |
+| 2 — Platform | 9 | Hardening, backups, release | 🗓 Planned |
 
----
-
-## Phase 0 — Foundation & tooling ✅
-
-**Objective:** stand up the repository and engineering baseline before any
-product features.
-
-**Scope:** project scaffolding; zero-dependency constraint (C-1); test
-framework selection (`node:test`, no dev dependencies); coding conventions
-(CommonJS, plain functions, strict mode).
-
-**Deliverables**
-
-- [x] `package.json` with `start` / `test` scripts and `bin` entry.
-- [x] Executable entry point (`bin/expense-tracker.js`).
-- [x] Test layout (`test/`) runnable via `npm test`.
-- [x] `.gitignore`, branch and commit conventions.
-
-**Acceptance criteria**
-
-- [x] `node --check` passes on all source files.
-- [x] `npm test` runs the (initially minimal) suite green.
-- [x] The application prints usage documentation via `--help` (FR-103).
-
-**Exit criteria:** repository builds and tests green with no third-party
-packages installed.
+**Track 1 disposition.** The delivered CLI (Phases 0–1) stays functional and
+receives bug fixes only (FR-400/401). Its v1 Phase 2–4 scope is superseded by
+the platform phases below (e.g. v1 budgets → FR-260/261 in Phase 8).
 
 ---
 
-## Phase 1 — MVP: core tracking & Markdown persistence ✅
+## Phase 5 — Backend & database foundation ⏳ (next)
 
-**Objective:** deliver the minimum lovable product — record expenses and
-income through questions, store them in Markdown, and read them back.
+**Objective:** a runnable, deployable API skeleton with authentication,
+schema, and CI — the foundation every later phase builds on.
 
-**Scope (requirements)**
-
-- Interactive, question-driven entry flows: FR-001 – FR-007.
-- Non-interactive entry: FR-020 – FR-022.
-- Markdown storage, IDs, escaping, hand-edit tolerance: FR-040 – FR-047.
-- Listing and filtering: FR-060 – FR-061.
-- Summaries (CLI and in-file): FR-062 – FR-064.
-- Deletion: FR-080 – FR-081.
-- Configuration and help: FR-100 – FR-103.
-- Non-functional: NFR-001, NFR-003, NFR-005, NFR-006, NFR-007, NFR-008.
+**Scope (requirements):** FR-200 – FR-203, FR-228, FR-203 currency setting;
+NFR-010, NFR-011, NFR-013, NFR-040, NFR-050 (structure), NFR-051, NFR-060.
 
 **Deliverables**
 
-- [x] `src/tracker.js` — core domain logic (validation, parse/render, summary).
-- [x] `src/cli.js` — interactive menu and command surface.
-- [x] `expenses.md` — initialized data file.
-- [x] `README.md` — user and developer documentation.
-- [x] 14 automated unit + CLI end-to-end tests, all passing.
+- [ ] .NET 8 solution: `ExpenseTracker.Api` + `ExpenseTracker.Tests` (xUnit).
+- [ ] EF Core models + Npgsql provider + migrations for `users`, `categories`,
+      `transactions` (per SRS Section 5); seeded default categories.
+- [ ] Authentication: registration/login, salted password hashes, JWT issuance
+      and validation; per-account data isolation (FR-202).
+- [ ] Docker Compose for local dev (api + postgres); health checks; Serilog.
+- [ ] OpenAPI/Swagger generated from code (FR-228).
+- [ ] CI pipeline: build + test on every push; integration tests against real
+      PostgreSQL via Testcontainers.
 
 **Acceptance criteria**
 
-- [x] A user can record an expense and a salary through prompts only (Enter
-      accepts defaults; invalid input re-prompts).
-- [x] All data survives restart and is legible on GitHub as rendered Markdown.
-- [x] Hand-edited rows (corrected amounts, added rows) are preserved; broken
-      rows are skipped with warnings (FR-043, FR-045, FR-046).
-- [x] Every CLI command fails loudly and safely on bad input (NFR-006).
-- [x] `npm test` is green.
+- [ ] `docker compose up` starts a working API; `/health` returns healthy.
+- [ ] Register → login → authenticated request succeeds; unauthenticated
+      requests return 401; account A cannot read account B's data.
+- [ ] Migrations apply cleanly to an empty database.
+- [ ] CI is green and covers the auth endpoints.
 
-**Exit criteria:** MVP usable daily by the personal-user persona; no known
-data-loss scenarios.
-
----
-
-## Phase 2 — Data management & robustness ⏳ (next)
-
-**Objective:** make corrections, planning, and migration first-class, so the
-tracker supports real monthly budgeting workflows.
-
-**Scope (requirements)**
-
-- Edit an existing transaction by ID: FR-120.
-- Monthly budgets per category with over-budget warnings: FR-121.
-- Recurring transactions (monthly salary, rent, subscriptions): FR-122.
-- CSV import/export: FR-123.
-
-**Deliverables**
-
-- [ ] `edit <id>` command plus an interactive "edit a transaction" flow.
-- [ ] Budget model persisted in the Markdown file (new `## Budgets` section)
-      with a `budget` command to set/show budgets and warnings in `summary`.
-- [ ] Recurring-transaction model (`## Recurring` section) with a `generate`
-      command that materializes due entries on demand.
-- [ ] `export --csv` and `import --csv` commands with a documented CSV schema
-      (date, type, category, description, method, amount) and a dry-run
-      preview for imports.
-- [ ] Tests for each feature, including budget-warning and import edge cases.
-
-**Acceptance criteria**
-
-- [ ] An entry can be fully edited (or a field updated) without deleting and
-      re-adding, and the change is visible in the file and summaries.
-- [ ] Setting a budget of X for a category and exceeding it produces a clear
-      warning in `summary` output.
-- [ ] A monthly salary recurring entry generates exactly one transaction per
-      month for the requested range, with stable IDs.
-- [ ] A CSV exported and re-imported round-trips to identical transaction
-      data; malformed CSV rows are rejected with row-level errors and no
-      partial import.
-
-**Exit criteria:** all Phase 2 requirements pass acceptance; no regression in
-the existing test suite.
-
-**Effort estimate:** M (three focused work sessions: edit; budgets +
-recurring; CSV).
-
----
-
-## Phase 3 — Insights, trends & scale 🗓
-
-**Objective:** turn recorded data into analysis the user can act on, and
-verify the tool at realistic data volumes.
-
-**Scope (requirements)**
-
-- Trend reports, month-over-month deltas: FR-130.
-- Terminal category breakdown charts: FR-131.
-- Performance verification: NFR-002.
-
-**Deliverables**
-
-- [ ] `report` command: last N months income/expenses/net table with deltas
-      and sparkline-style ASCII bars.
-- [ ] Category breakdown chart (ASCII bars + share percentages) in `summary`.
-- [ ] Load-test harness generating 10,000 transactions and asserting the
-      1-second budget for `list`, `summary`, and `add`.
-
-**Acceptance criteria**
-
-- [ ] `report` shows correct deltas between consecutive months.
-- [ ] Charts render legibly at 80-column terminals.
-- [ ] Performance budget met on the 10k dataset, or bottlenecks documented
-      with a follow-up ticket.
-
-**Exit criteria:** insights validated against hand-computed fixtures.
+**Exit criteria:** schema and auth stable enough that Phases 6+ add endpoints
+without breaking changes.
 
 **Effort estimate:** M.
 
 ---
 
-## Phase 4 — Hardening, distribution & expansion 🗓
+## Phase 6 — Core API: transactions, summaries, Markdown migration 🗓
 
-**Objective:** make the tool trustworthy for daily long-term use and decide
-on the next form factor.
+**Objective:** deliver the complete transaction lifecycle and reporting over
+the Phase 5 foundation, including one-shot migration of legacy CLI data.
 
-**Scope**
-
-- Portability matrix (NFR-004) via GitHub Actions CI on Linux/macOS/Windows.
-- Packaging and distribution (npm package, `npm install -g` path).
-- Data safety: automated backup of the data file on destructive commands,
-  with a documented restore procedure.
-- Decision point: web UI on the same Markdown data format (FR-140) —
-  in scope only after a written proposal and user sign-off.
+**Scope (requirements):** FR-220 – FR-227, FR-240, FR-280, FR-281, FR-320,
+FR-321; NFR-020 (targets), NFR-080, NFR-050 (coverage).
 
 **Deliverables**
 
-- [ ] CI workflow running `npm test` on the OS/Node matrix.
-- [ ] Published npm package with installation docs.
-- [ ] Backup/restore documentation and tests.
+- [ ] Transaction endpoints: create, update (FR-224), delete, list with
+      month/type/category filters and paging (FR-226).
+- [ ] Category endpoints: list, create custom categories (FR-223).
+- [ ] Summary endpoint: all-time and per-month totals, net, category
+      breakdown with shares (FR-240).
+- [ ] Markdown export endpoint (FR-280) emitting the v1 exchange format.
+- [ ] Markdown import endpoint/tool (FR-281): atomic migration of the legacy
+      `expenses.md` with a per-row error report.
+- [ ] xUnit + Testcontainers suite covering validation, paging, summaries,
+      and round-trip export/import.
 
 **Acceptance criteria**
 
-- [ ] CI green on all matrix combinations before every release tag.
-- [ ] A fresh machine can install and use the tool within five minutes
-      following the README.
+- [ ] Every v1 domain rule (amount > 0 and ≤ 2 decimals, real dates, expense /
+      income types) is enforced server-side (FR-320/321).
+- [ ] A legacy `expenses.md` migrates with zero data loss; re-exporting it
+      yields an equivalent document.
+- [ ] Summary math matches hand-computed fixtures (ported from the CLI test
+      suite).
+- [ ] Invalid input produces field-level 400 errors and leaves data unchanged.
 
-**Exit criteria:** v1.0 release tagged from this phase.
+**Exit criteria:** the API covers everything the Android client MVP needs.
+
+**Effort estimate:** M–L.
+
+---
+
+## Phase 7 — React Native Android client — MVP 🗓
+
+**Objective:** a daily-usable Android app: login, guided question-driven
+entry, list, and dashboard against the Phase 6 API.
+
+**Scope (requirements):** FR-300 – FR-304 (FR-304 offline queue is Should);
+NFR-070, NFR-040 (device matrix).
+
+**Deliverables**
+
+- [ ] React Native (TypeScript) project targeting Android 8.0+.
+- [ ] Auth screens: register, login, logout; secure on-device token storage.
+- [ ] Guided add flow (FR-301): amount → category (pick or custom) →
+      description → date (default: today) → payment method (default: Card /
+      Bank transfer) → confirm; invalid input re-prompts in place.
+- [ ] Transaction list with month/type filters (FR-302).
+- [ ] Dashboard: monthly income, expenses, net, category breakdown (FR-303).
+- [ ] Offline capture queue with background sync and rejected-entry surfacing
+      (FR-304).
+- [ ] Detox or component tests for the add flow; tested on emulator + at
+      least one physical device.
+
+**Acceptance criteria**
+
+- [ ] Adding a transaction takes at most five interactions (NFR-070) and
+      every prompt shows its default.
+- [ ] An entry captured in airplane mode syncs correctly once online.
+- [ ] The app installs and runs on Android 8.0+ emulators and test devices.
+
+**Exit criteria:** the product is usable daily end-to-end by the mobile-user
+persona.
+
+**Effort estimate:** L.
+
+---
+
+## Phase 8 — Budgets, recurring transactions, insights 🗓
+
+**Objective:** planning features and trend visibility on top of the MVP.
+
+**Scope (requirements):** FR-241, FR-242, FR-260 – FR-262, FR-282, FR-305.
+
+**Deliverables**
+
+- [ ] Budget endpoints + client UI: set monthly budgets per category; summary
+      warnings when exceeded (FR-260/261, FR-242).
+- [ ] Recurring rules: define (e.g. monthly salary on day 1), materialize
+      exactly once per period via a scheduled job (FR-262).
+- [ ] Monthly trend endpoint (FR-241) + client trend chart (FR-305).
+- [ ] CSV export (FR-282).
+- [ ] Tests: budget-warning fixtures; recurring materialization idempotence.
+
+**Acceptance criteria**
+
+- [ ] A monthly-salary rule generates exactly one transaction per month for a
+      requested range, with stable IDs and no duplicates on re-runs.
+- [ ] Over-budget warnings appear in API summaries and the client dashboard.
+- [ ] Trend series match hand-computed month-over-month fixtures.
+
+**Exit criteria:** all Should-priority requirements delivered and green.
+
+**Effort estimate:** M.
+
+---
+
+## Phase 9 — Hardening, backups, release 🗓
+
+**Objective:** production trustworthiness and the v2.0 release.
+
+**Scope (requirements):** NFR-012 (OWASP checklist), NFR-020 (load test),
+NFR-030 (backups/restore), NFR-011 (TLS enforcement), NFR-060 finalization.
+
+**Deliverables**
+
+- [ ] Security review: rate limiting, OWASP API Top 10 checklist sign-off.
+- [ ] Load test meeting NFR-020 targets with documented headroom.
+- [ ] Automated nightly `pg_dump` backups + rehearsed restore procedure.
+- [ ] Production deployment docs (Docker/managed Postgres), monitoring hooks.
+- [ ] Signed Android app bundle (AAB) submitted to Play Console internal
+      testing, then production.
+- [ ] v2.0 release tag; user-facing documentation refresh.
+
+**Acceptance criteria**
+
+- [ ] OWASP checklist signed off; restore drill passes on a staging database.
+- [ ] Play Console accepts the signed AAB and internal testers complete the
+      add → list → summary journey.
+- [ ] v2.0 tagged with green CI on the release commit.
+
+**Exit criteria:** v2.0 released.
 
 **Effort estimate:** S–M.
 
@@ -201,15 +206,19 @@ on the next form factor.
 
 | Risk | Phase | Mitigation |
 | --- | --- | --- |
-| Hand edits corrupt table structure | 1+ | Escaping rules, skip-with-warning parsing, load-time ID repair (FR-043 – FR-046) |
-| Markdown format becomes too rigid for budgets/recurring | 2 | Extend with new sibling sections; never repurpose existing columns |
-| CSV import partially applied on error | 2 | Dry-run validation of the full file before writing anything |
-| Performance degrades at scale | 3 | 10k load test in Phase 3 guards NFR-002 before features pile up |
-| Web UI forks the data format | 4 | The Markdown file stays the single source of truth for any UI |
+| Offline sync conflicts (FR-304) | 7 | Server-authoritative writes; queued entries replayed once; rejected entries surfaced for manual fix |
+| Auth/security gaps | 5, 9 | Salted hashes + JWT from day one; OWASP checklist gate before release (NFR-012) |
+| Markdown import edge cases (hand-edited files) | 6 | Port the CLI's tolerant parser rules; atomic import + per-row report (FR-281) |
+| Schema churn breaks clients | 5–9 | EF migrations reviewed per phase; OpenAPI diff checked in CI (NFR-051) |
+| Recurring job double-materialization | 8 | Idempotent generation keyed by period; idempotence tests |
+| PostgreSQL operational risk | 9 | Nightly pg_dump + rehearsed restore (NFR-030); managed Postgres optional |
+| Play Store policy/requirements surprises | 9 | Internal testing track early; data-privacy disclosure for financial data |
 
 ## Change control
 
-Changes to requirements or phase scope are made by updating the
-[SRS](./REQUIREMENTS.md) and this plan together, bumping both document
-versions, and noting the change in the repository commit message.
+Scope or requirement changes update the [SRS](./REQUIREMENTS.md) and this
+plan together, bumping both document versions, with the change recorded in
+the revision histories and the committing message (e.g. this v2.0 re-baseline
+recorded the platform decision: ASP.NET Core 8 + PostgreSQL, React Native
+Android, no web UI).
 

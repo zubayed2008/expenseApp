@@ -1,10 +1,32 @@
 # Expense Tracker
 
-A zero-dependency command-line expense tracker that stores everything in a
-**human-readable Markdown file** (`expenses.md`). It tracks **expenses** as well
-as **salary and other income**, keeps a live summary (totals, net balance,
-spending by category), and — when run with no arguments — **asks you questions**
-interactively to record each transaction.
+A personal expense tracker that records **expenses** and **salary / other
+income**, keeps a live summary (totals, net balance, spending by category),
+and **asks you questions** interactively to record each transaction.
+
+## Project direction (v2 — re-baselined 2026-10-20)
+
+The product is moving from a local CLI to a platform architecture:
+
+```text
+React Native client (Android)  ──HTTPS, JSON, JWT──▶  ASP.NET Core 8 REST API  ──EF Core / Npgsql──▶  PostgreSQL 16
+```
+
+- **Backend:** ASP.NET Core 8 (LTS) + PostgreSQL 16 via EF Core/Npgsql —
+  money stored as `numeric(18,2)` (C# `decimal`), JWT auth, OpenAPI.
+- **Client:** React Native (TypeScript), Android 8.0+ only. **No web UI** (an
+  explicit scoping decision).
+- **Legacy CLI:** the delivered Markdown CLI below is in **maintenance mode**
+  (bug fixes only). Its data migrates to the platform via a Markdown import,
+  and the Markdown format is retained as an export/backup format.
+
+Full details: [Requirements (SRS)](docs/REQUIREMENTS.md) ·
+[Implementation Plan](docs/IMPLEMENTATION_PLAN.md)
+
+## Legacy CLI (delivered, maintenance mode)
+
+A zero-dependency command-line tracker that stores everything in a
+**human-readable Markdown file** (`expenses.md`).
 
 ## Features
 
@@ -159,22 +181,25 @@ npm start    # same as: node bin/expense-tracker.js
 
 ## Documentation
 
-- [Requirements (SRS)](docs/REQUIREMENTS.md) — purpose, scope, personas, and
-  the complete numbered functional/non-functional requirements with
-  priorities and delivery status.
-- [Implementation Plan](docs/IMPLEMENTATION_PLAN.md) — phased delivery plan
-  (objectives, deliverables, acceptance criteria, and exit criteria per
-  phase), plus risks and change control.
+- [Requirements (SRS) v2](docs/REQUIREMENTS.md) — re-baselined for the platform
+  architecture: numbered functional (FR-xxx) and non-functional (NFR-xxx)
+  requirements with MoSCoW priorities and status, data model, out-of-scope
+  list, and traceability to v1.
+- [Implementation Plan v2](docs/IMPLEMENTATION_PLAN.md) — two delivery tracks
+  with objectives, deliverables, acceptance criteria, and exit criteria per
+  phase, plus risks and change control.
 
 ## Roadmap
 
-Delivery is broken into phases — see the
+Delivery is organized in two tracks — see the
 [Implementation Plan](docs/IMPLEMENTATION_PLAN.md) for full details:
 
-| Phase | Theme | Status |
-| --- | --- | --- |
-| 0 | Foundation & tooling | ✅ Complete |
-| 1 | MVP — core tracking & Markdown persistence | ✅ Complete |
-| 2 | Editing, budgets, recurring transactions, CSV | ⏳ Next |
-| 3 | Trend reports, charts, performance at scale | 🗓 Planned |
-| 4 | CI matrix, packaging, web UI decision | 🗓 Planned |
+| Track | Phase | Theme | Status |
+| --- | --- | --- | --- |
+| CLI | 0 | Foundation & tooling | ✅ Complete |
+| CLI | 1 | MVP — core tracking & Markdown persistence | ✅ Complete — maintenance |
+| Platform | 5 | Backend & database foundation (ASP.NET Core 8, EF Core, JWT, Docker, CI) | ⏳ Next |
+| Platform | 6 | Core API — transactions, summaries, Markdown migration | 🗓 Planned |
+| Platform | 7 | React Native Android client — MVP | 🗓 Planned |
+| Platform | 8 | Budgets, recurring transactions, insights | 🗓 Planned |
+| Platform | 9 | Hardening, backups, v2.0 release | 🗓 Planned |
