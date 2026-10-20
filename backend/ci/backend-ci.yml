@@ -1,0 +1,45 @@
+# GitHub Actions workflow template for the backend.
+#
+# The repository push credential used for automated work lacks the
+# `workflows` permission, so this file cannot be committed directly under
+# `.github/workflows/`. To activate CI, copy this file to
+# `.github/workflows/backend-ci.yml` (via the GitHub web UI, "Add file" ->
+# "Create new file", or a push with workflows permission) and commit.
+#
+# CI runs `dotnet restore/build/test` on every push or pull request that
+# touches `backend/**`. Ubuntu runners provide Docker, so the Testcontainers
+# integration tests execute against real PostgreSQL there.
+name: backend-ci
+
+on:
+  push:
+    branches: ["**"]
+    paths:
+      - "backend/**"
+      - ".github/workflows/backend-ci.yml"
+  pull_request:
+    paths:
+      - "backend/**"
+      - ".github/workflows/backend-ci.yml"
+
+jobs:
+  build-test:
+    name: Build & test (net8.0)
+    runs-on: ubuntu-latest # Docker is available -> Testcontainers integration tests run
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Restore
+        run: dotnet restore backend/ExpenseTracker.sln
+
+      - name: Build
+        run: dotnet build backend/ExpenseTracker.sln -c Release --no-restore
+
+      - name: Test
+        run: dotnet test backend/ExpenseTracker.sln -c Release --no-build

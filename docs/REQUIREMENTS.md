@@ -3,7 +3,7 @@
 | | |
 | --- | --- |
 | **Product family** | Expense Tracker — REST API, Android client, legacy CLI |
-| **Document version** | 2.0 |
+| **Document version** | 2.1 |
 | **Date** | 2026-10-20 |
 | **Status** | Approved — re-baseline for platform architecture |
 | **Companion document** | [Implementation Plan](./IMPLEMENTATION_PLAN.md) |
@@ -14,6 +14,7 @@
 | --- | --- | --- |
 | 1.0 | 2026-10-20 | Initial SRS: zero-dependency Node.js CLI storing expenses and income in a Markdown file. Phases 0–1 delivered. |
 | 2.0 | 2026-10-20 | Re-baseline to a platform architecture: ASP.NET Core 8 + PostgreSQL backend and a React Native (Android) client. Web UI explicitly excluded. Legacy CLI moves to maintenance mode; v1 Phases 2–4 are superseded by platform Phases 5–9. Domain rules (validation, summaries, budgets, recurring) are carried forward and re-specified below. |
+| 2.1 | 2026-10-20 | Phase 5 implementation note: `categories.user_id` is required (not nullable); default categories are seeded per account at registration (FR-223) instead of via global seed rows. Data-model section updated to match the delivered schema. |
 
 ## 1. Introduction
 
@@ -78,7 +79,7 @@ to authoritative data; any offline capability (FR-304) syncs back to the API.
 
 | Component | Status |
 | --- | --- |
-| REST API + PostgreSQL | Planned (Phases 5–6) |
+| REST API + PostgreSQL | Foundation delivered (Phase 5); core endpoints in Phase 6 |
 | React Native Android client | Planned (Phase 7) |
 | Budgets, recurring, insights | Planned (Phase 8) |
 | Legacy CLI | Delivered, maintenance mode |
@@ -124,10 +125,10 @@ are new for v2; traceability to v1 IDs is in Section 7.
 
 | ID | Requirement | Priority | Status |
 | --- | --- | --- | --- |
-| FR-200 | The API shall support account registration with email and password; passwords shall be stored only as salted hashes. | M | Planned (Phase 5) |
-| FR-201 | The API shall issue short-lived JWT access tokens on login and shall reject expired or invalid tokens. | M | Planned (Phase 5) |
-| FR-202 | All user data shall be isolated per account; no endpoint may return or modify another account's data. | M | Planned (Phase 5) |
-| FR-203 | The user shall be able to set their account currency (ISO-4217, default USD) and change it while no transactions exist. | S | Planned (Phase 5) |
+| FR-200 | The API shall support account registration with email and password; passwords shall be stored only as salted hashes. | M | Delivered (Phase 5) |
+| FR-201 | The API shall issue short-lived JWT access tokens on login and shall reject expired or invalid tokens. | M | Delivered (Phase 5) |
+| FR-202 | All user data shall be isolated per account; no endpoint may return or modify another account's data. | M | Delivered (Phase 5) |
+| FR-203 | The user shall be able to set their account currency (ISO-4217, default USD) and change it while no transactions exist. | S | Delivered (Phase 5) |
 
 ### 3.2 Transactions and categories
 
@@ -136,12 +137,12 @@ are new for v2; traceability to v1 IDs is in Section 7.
 | FR-220 | The API shall create transactions with type (expense/income), amount, date, category, description, and payment method. | M | Planned (Phase 6) |
 | FR-221 | The API shall validate amounts as positive numbers with at most two decimals and shall reject everything else with field-level errors. | M | Planned (Phase 6) |
 | FR-222 | The API shall validate dates as real calendar dates (`YYYY-MM-DD`) and shall reject invalid ones. | M | Planned (Phase 6) |
-| FR-223 | Categories shall be seeded per account (expense and income lists matching the legacy CLI defaults) and shall support user-created custom categories. | M | Planned (Phase 6) |
+| FR-223 | Categories shall be seeded per account (expense and income lists matching the legacy CLI defaults) and shall support user-created custom categories. | M | Seeding delivered (Phase 5); custom categories in Phase 6 |
 | FR-224 | The API shall update an existing transaction by ID (supersedes v1 FR-120). | M | Planned (Phase 6) |
 | FR-225 | The API shall delete a transaction by ID. | M | Planned (Phase 6) |
 | FR-226 | The API shall list transactions with filters by month, type, and category, sorted most-recent-first, with paging (`limit`/`offset` or cursor). | M | Planned (Phase 6) |
 | FR-227 | Every transaction shall carry a stable server-assigned ID and created/updated timestamps. | M | Planned (Phase 6) |
-| FR-228 | The API shall expose an OpenAPI specification generated from code. | M | Planned (Phase 5) |
+| FR-228 | The API shall expose an OpenAPI specification generated from code. | M | Delivered (Phase 5) |
 
 ### 3.3 Summaries and reports
 
@@ -217,7 +218,7 @@ Logical model (physical design follows in Phase 5 migrations):
 | Table | Key columns | Notes |
 | --- | --- | --- |
 | `users` | id, email, password_hash, currency, created_at | Currency: ISO-4217, default USD |
-| `categories` | id, user_id (nullable), name, kind (expense/income) | `user_id NULL` = global seed row |
+| `categories` | id, user_id, name, kind (expense/income) | Seeded per account at registration (FR-223); unique on (user_id, kind, name) |
 | `transactions` | id, user_id, type, date, amount numeric(18,2), category_id, description, payment_method, recurring_rule_id (nullable), created_at, updated_at | Index on (user_id, date) |
 | `recurring_rules` | id, user_id, type, amount, category_id, day_of_month, active | Materialized by scheduled job |
 | `budgets` | id, user_id, category_id, monthly_amount | One active budget per category |

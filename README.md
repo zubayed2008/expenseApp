@@ -23,6 +23,30 @@ React Native client (Android)  ──HTTPS, JSON, JWT──▶  ASP.NET Core 8 R
 Full details: [Requirements (SRS)](docs/REQUIREMENTS.md) ·
 [Implementation Plan](docs/IMPLEMENTATION_PLAN.md)
 
+## Backend (Phase 5 delivered)
+
+The ASP.NET Core 8 + PostgreSQL backend lives in `backend/`:
+
+```bash
+# Local stack: API on http://localhost:8080 (Swagger at /swagger), Postgres on :5432
+docker compose -f backend/docker-compose.yml up --build
+
+# Or run with a local .NET 8 SDK
+dotnet run --project backend/src/ExpenseTracker.Api     # http://localhost:5000
+
+# Tests (unit tests always run; integration tests use Testcontainers/Docker when available)
+dotnet test backend/ExpenseTracker.sln
+
+# EF Core migrations
+dotnet tool run dotnet-ef migrations add <Name> \
+  --project backend/src/ExpenseTracker.Api --startup-project backend/src/ExpenseTracker.Api
+```
+
+Auth flow: `POST /auth/register` (email, password, currency) → `POST /auth/login`
+(JWT access token) → authenticated requests with `Authorization: Bearer <token>`.
+Production configuration comes from environment variables
+(`ConnectionStrings__DefaultConnection`, `Jwt__SigningKey`).
+
 ## Legacy CLI (delivered, maintenance mode)
 
 A zero-dependency command-line tracker that stores everything in a
@@ -198,8 +222,8 @@ Delivery is organized in two tracks — see the
 | --- | --- | --- | --- |
 | CLI | 0 | Foundation & tooling | ✅ Complete |
 | CLI | 1 | MVP — core tracking & Markdown persistence | ✅ Complete — maintenance |
-| Platform | 5 | Backend & database foundation (ASP.NET Core 8, EF Core, JWT, Docker, CI) | ⏳ Next |
-| Platform | 6 | Core API — transactions, summaries, Markdown migration | 🗓 Planned |
+| Platform | 5 | Backend & database foundation (ASP.NET Core 8, EF Core, JWT, Docker, CI) | ✅ Complete |
+| Platform | 6 | Core API — transactions, summaries, Markdown migration | ⏳ Next |
 | Platform | 7 | React Native Android client — MVP | 🗓 Planned |
 | Platform | 8 | Budgets, recurring transactions, insights | 🗓 Planned |
 | Platform | 9 | Hardening, backups, v2.0 release | 🗓 Planned |
