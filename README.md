@@ -157,10 +157,24 @@ npm test     # run the test suite (node --test)
 npm start    # same as: node bin/expense-tracker.js
 ```
 
-## Roadmap ideas
+## Documentation
 
-- [ ] Edit an existing transaction
-- [ ] Monthly budgets per category with warnings
-- [ ] CSV import/export
-- [ ] Recurring transactions (e.g. monthly salary)
-- [ ] Web or mobile UI on top of the same markdown file
+- [Requirements (SRS)](docs/REQUIREMENTS.md) — purpose, scope, personas, and
+  the complete numbered functional/non-functional requirements with
+  priorities and delivery status.
+- [Implementation Plan](docs/IMPLEMENTATION_PLAN.md) — phased delivery plan
+  (objectives, deliverables, acceptance criteria, and exit criteria per
+  phase), plus risks and change control.
+
+## Roadmap
+
+Delivery is broken into phases — see the
+[Implementation Plan](docs/IMPLEMENTATION_PLAN.md) for full details:
+
+| Phase | Theme | Status |
+| --- | --- | --- |
+| 0 | Foundation & tooling | ✅ Complete |
+| 1 | MVP — core tracking & Markdown persistence | ✅ Complete |
+| 2 | Editing, budgets, recurring transactions, CSV | ⏳ Next |
+| 3 | Trend reports, charts, performance at scale | 🗓 Planned |
+| 4 | CI matrix, packaging, web UI decision | 🗓 Planned |
