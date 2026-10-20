@@ -2,7 +2,7 @@
 
 | | |
 | --- | --- |
-| **Document version** | 2.1 |
+| **Document version** | 2.2 |
 | **Date** | 2026-10-20 |
 | **Companion document** | [Requirements (SRS)](./REQUIREMENTS.md) |
 | **Delivery approach** | Two tracks; every phase ships working, tested software |
@@ -14,6 +14,7 @@
 | 1.0 | 2026-10-20 | Five phases for the Node.js CLI / Markdown product (Phases 0–1 delivered). |
 | 2.0 | 2026-10-20 | Re-baseline for the platform architecture (ASP.NET Core 8 + PostgreSQL backend, React Native Android client, no web UI). CLI Phases 2–4 are superseded; the CLI enters maintenance (Track 1). New platform phases 5–9 (Track 2). |
 | 2.1 | 2026-10-20 | Phase 5 delivered: solution scaffold, EF Core + Npgsql models and initial migration (users, categories, transactions), per-account category seeding, bcrypt + JWT auth, Serilog, health checks, OpenAPI/Swagger, Dockerfile, docker-compose, CI workflow template (`backend/ci/backend-ci.yml`, to be activated under `.github/workflows/`), xUnit unit tests (31 passing) and Testcontainers integration tests (skip without Docker; run in CI). |
+| 2.2 | 2026-10-20 | Phase 5 restructured per architecture decision: regular controllers (no minimal APIs) + CQRS (MediatR + FluentValidation pipeline) in a Domain / Service / Infrastructure / WebCore / Api layering. EF-generated migrations replaced by numbered SQL scripts in `ExpenseTracker.Domain/Migrations` (schema_migrations tracking; applied manually or via SqlMigrationRunner with advisory locking). All 45 tests verified green against a real PostgreSQL 16 server (integration tests included), plus CLI regression tests. |
 
 ## 1. Overview
 
@@ -46,13 +47,22 @@ NFR-010, NFR-011, NFR-013, NFR-040, NFR-050 (structure), NFR-051, NFR-060.
 
 **Deliverables**
 
-- [x] .NET 8 solution: `ExpenseTracker.Api` + `ExpenseTracker.Tests` (xUnit)
-      under `backend/`.
-- [x] EF Core models + Npgsql provider + initial migration for `users`,
-      `categories`, `transactions` (per SRS Section 5); 12 expense + 8 income
-      default categories seeded per account at registration.
-- [x] Authentication: registration/login (`POST /auth/register`,
-      `POST /auth/login`, `GET /auth/me`), bcrypt password hashes, JWT
+- [x] Layered .NET 8 solution under `backend/`:
+      `ExpenseTracker.Domain` (entities, rules, numbered SQL migrations),
+      `ExpenseTracker.Service` (CQRS: MediatR commands/queries + FluentValidation
+      pipeline), `ExpenseTracker.Infrastructure` (EF Core + Npgsql mapping,
+      repositories, bcrypt, JWT, SqlMigrationRunner), `ExpenseTracker.WebCore`
+      (ApiControllerBase, exception-to-ProblemDetails middleware, auth wiring),
+      `ExpenseTracker.Api` (regular controllers + host), and xUnit tests.
+- [x] Numbered SQL migrations in `ExpenseTracker.Domain/Migrations`
+      (000_create_schema_migrations, 001_create_users, 002_create_categories,
+      003_create_transactions) with a `schema_migrations` tracking table,
+      applied manually or by the built-in runner (advisory-locked); EF Core maps
+      to the SQL-defined schema (snake_case) and generates no migrations;
+      12 expense + 8 income default categories seeded per account at
+      registration.
+- [x] Authentication: registration/login (`POST /api/auth/register`,
+      `POST /api/auth/login`, `GET /api/auth/me`), bcrypt password hashes, JWT
       issuance and validation; per-account data isolation (FR-202).
 - [x] Docker Compose for local dev (api + postgres); health checks
       (`GET /health` incl. DB check); Serilog structured logging.
@@ -79,10 +89,14 @@ NFR-010, NFR-011, NFR-013, NFR-040, NFR-050 (structure), NFR-051, NFR-060.
 **Exit criteria:** schema and auth stable enough that Phases 6+ add endpoints
 without breaking changes. Met.
 
-**Verification notes (2026-10-20):** `dotnet build` clean; 31/31 unit tests
-passing locally (validation rules ported from the CLI, bcrypt, JWT);
-integration tests (8) skip without Docker and execute in CI where Docker is
-available.
+**Verification notes (2026-10-20, plan v2.2):** `dotnet build` clean; the full
+suite — 37 unit tests plus 8 integration tests (auth flows, isolation,
+health, seeded categories, duplicate-email 409) — verified green **twice
+against a real PostgreSQL 16.4 server** in the development sandbox
+(via `EXPENSE_TRACKER_TEST_CONNECTION`); a concurrent-migration race found
+during verification was fixed with a PostgreSQL advisory lock in
+SqlMigrationRunner. Integration tests also run via Testcontainers in CI and
+skip gracefully without Docker.
 
 **Effort estimate:** M.
 

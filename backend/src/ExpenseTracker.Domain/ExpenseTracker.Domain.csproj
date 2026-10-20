@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>ExpenseTracker.Domain</RootNamespace>
+  </PropertyGroup>
+
+  <!-- Numbered SQL migrations, applied manually or via SqlMigrationRunner. -->
+  <ItemGroup>
+    <EmbeddedResource Include="Migrations/**/*.sql" />
+  </ItemGroup>
+
+</Project>

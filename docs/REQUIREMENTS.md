@@ -3,7 +3,7 @@
 | | |
 | --- | --- |
 | **Product family** | Expense Tracker — REST API, Android client, legacy CLI |
-| **Document version** | 2.1 |
+| **Document version** | 2.2 |
 | **Date** | 2026-10-20 |
 | **Status** | Approved — re-baseline for platform architecture |
 | **Companion document** | [Implementation Plan](./IMPLEMENTATION_PLAN.md) |
@@ -15,6 +15,7 @@
 | 1.0 | 2026-10-20 | Initial SRS: zero-dependency Node.js CLI storing expenses and income in a Markdown file. Phases 0–1 delivered. |
 | 2.0 | 2026-10-20 | Re-baseline to a platform architecture: ASP.NET Core 8 + PostgreSQL backend and a React Native (Android) client. Web UI explicitly excluded. Legacy CLI moves to maintenance mode; v1 Phases 2–4 are superseded by platform Phases 5–9. Domain rules (validation, summaries, budgets, recurring) are carried forward and re-specified below. |
 | 2.1 | 2026-10-20 | Phase 5 implementation note: `categories.user_id` is required (not nullable); default categories are seeded per account at registration (FR-223) instead of via global seed rows. Data-model section updated to match the delivered schema. |
+| 2.2 | 2026-10-20 | Phase 5 implementation note: the backend is structured as Domain / Service (CQRS) / Infrastructure / WebCore / Api (controllers), per architecture decision. The physical schema is delivered as numbered SQL scripts (`ExpenseTracker.Domain/Migrations/000…003`), applied manually or by the built-in SqlMigrationRunner; EF Core maps to that schema and no longer generates migrations. |
 
 ## 1. Introduction
 
@@ -213,7 +214,11 @@ are new for v2; traceability to v1 IDs is in Section 7.
 
 ## 5. Data model (summary)
 
-Logical model (physical design follows in Phase 5 migrations):
+Logical model (physical schema delivered as numbered SQL scripts in
+`ExpenseTracker.Domain/Migrations` — `000_create_schema_migrations.sql`,
+`001_create_users.sql`, `002_create_categories.sql`,
+`003_create_transactions.sql` — applied manually or by the built-in
+SqlMigrationRunner; applied versions are tracked in `schema_migrations`):
 
 | Table | Key columns | Notes |
 | --- | --- | --- |

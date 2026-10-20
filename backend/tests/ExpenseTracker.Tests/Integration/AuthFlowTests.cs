@@ -2,7 +2,7 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
-using ExpenseTracker.Api.Models;
+using ExpenseTracker.Domain;
 using ExpenseTracker.Tests.Integration;
 
 /// <summary>
@@ -18,7 +18,7 @@ public class AuthFlowTests(ExpenseTrackerApiFactory factory) : IClassFixture<Exp
     private static async Task<string> RegisterAndLoginAsync(
         HttpClient client, string email, string password = "correct-horse-battery")
     {
-        var register = await client.PostAsJsonAsync("/auth/register", new
+        var register = await client.PostAsJsonAsync("/api/auth/register", new
         {
             Email = email,
             Password = password,
@@ -26,7 +26,7 @@ public class AuthFlowTests(ExpenseTrackerApiFactory factory) : IClassFixture<Exp
         });
         register.EnsureSuccessStatusCode();
 
-        var login = await client.PostAsJsonAsync("/auth/login", new { Email = email, Password = password });
+        var login = await client.PostAsJsonAsync("/api/auth/login", new { Email = email, Password = password });
         login.EnsureSuccessStatusCode();
         var body = await login.Content.ReadFromJsonAsync<JsonElement>(Json);
         return body.GetProperty("accessToken").GetString()!;
@@ -39,7 +39,7 @@ public class AuthFlowTests(ExpenseTrackerApiFactory factory) : IClassFixture<Exp
         using var client = factory.CreateClient();
         var email = UniqueEmail();
 
-        var response = await client.PostAsJsonAsync("/auth/register", new
+        var response = await client.PostAsJsonAsync("/api/auth/register", new
         {
             Email = email,
             Password = "correct-horse-battery",
@@ -71,8 +71,8 @@ public class AuthFlowTests(ExpenseTrackerApiFactory factory) : IClassFixture<Exp
         using var client = factory.CreateClient();
         var email = UniqueEmail();
 
-        var first = await client.PostAsJsonAsync("/auth/register", new { Email = email, Password = "correct-horse-battery" });
-        var duplicate = await client.PostAsJsonAsync("/auth/register", new { Email = email, Password = "another-password-1" });
+        var first = await client.PostAsJsonAsync("/api/auth/register", new { Email = email, Password = "correct-horse-battery" });
+        var duplicate = await client.PostAsJsonAsync("/api/auth/register", new { Email = email, Password = "another-password-1" });
 
         Assert.Equal(HttpStatusCode.Created, first.StatusCode);
         Assert.Equal(HttpStatusCode.Conflict, duplicate.StatusCode);
@@ -84,7 +84,7 @@ public class AuthFlowTests(ExpenseTrackerApiFactory factory) : IClassFixture<Exp
         Skip.IfNot(DockerEnvironment.IsAvailable, "Docker is not available in this environment.");
         using var client = factory.CreateClient();
 
-        var response = await client.PostAsJsonAsync("/auth/register", new { Email = "bad", Password = "short" });
+        var response = await client.PostAsJsonAsync("/api/auth/register", new { Email = "bad", Password = "short" });
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         var body = await response.Content.ReadFromJsonAsync<JsonElement>(Json);
@@ -101,7 +101,7 @@ public class AuthFlowTestsPart2(ExpenseTrackerApiFactory factory) : IClassFixtur
     private static async Task<string> RegisterAndLoginAsync(
         HttpClient client, string email, string password = "correct-horse-battery")
     {
-        var register = await client.PostAsJsonAsync("/auth/register", new
+        var register = await client.PostAsJsonAsync("/api/auth/register", new
         {
             Email = email,
             Password = password,
@@ -109,7 +109,7 @@ public class AuthFlowTestsPart2(ExpenseTrackerApiFactory factory) : IClassFixtur
         });
         register.EnsureSuccessStatusCode();
 
-        var login = await client.PostAsJsonAsync("/auth/login", new { Email = email, Password = password });
+        var login = await client.PostAsJsonAsync("/api/auth/login", new { Email = email, Password = password });
         login.EnsureSuccessStatusCode();
         var body = await login.Content.ReadFromJsonAsync<JsonElement>(Json);
         return body.GetProperty("accessToken").GetString()!;
@@ -126,7 +126,7 @@ public class AuthFlowTestsPart2(ExpenseTrackerApiFactory factory) : IClassFixtur
         var token = await RegisterAndLoginAsync(client, email);
 
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
-        var me = await client.GetAsync("/auth/me");
+        var me = await client.GetAsync("/api/auth/me");
 
         Assert.Equal(HttpStatusCode.OK, me.StatusCode);
         var body = await me.Content.ReadFromJsonAsync<JsonElement>(Json);
@@ -141,7 +141,7 @@ public class AuthFlowTestsPart2(ExpenseTrackerApiFactory factory) : IClassFixtur
         var email = UniqueEmail();
         await RegisterAndLoginAsync(client, email);
 
-        var response = await client.PostAsJsonAsync("/auth/login", new { Email = email, Password = "wrong-password-123" });
+        var response = await client.PostAsJsonAsync("/api/auth/login", new { Email = email, Password = "wrong-password-123" });
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
@@ -152,7 +152,7 @@ public class AuthFlowTestsPart2(ExpenseTrackerApiFactory factory) : IClassFixtur
         Skip.IfNot(DockerEnvironment.IsAvailable, "Docker is not available in this environment.");
         using var client = factory.CreateClient();
 
-        var response = await client.GetAsync("/auth/me");
+        var response = await client.GetAsync("/api/auth/me");
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
@@ -170,7 +170,7 @@ public class AuthFlowTestsPart2(ExpenseTrackerApiFactory factory) : IClassFixtur
 
         // FR-202: user A's token only ever resolves to user A.
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", tokenA);
-        var me = await client.GetAsync("/auth/me");
+        var me = await client.GetAsync("/api/auth/me");
         var body = await me.Content.ReadFromJsonAsync<JsonElement>(Json);
         Assert.Equal(emailA, body.GetProperty("email").GetString());
 

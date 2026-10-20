@@ -2,7 +2,7 @@ namespace ExpenseTracker.Tests.Unit;
 
 public class BcryptPasswordHasherTests
 {
-    private readonly ExpenseTracker.Api.Services.BcryptPasswordHasher _hasher = new();
+    private readonly ExpenseTracker.Infrastructure.Security.BCryptPasswordHasher _hasher = new();
 
     [Theory]
     [InlineData("correct horse battery")]

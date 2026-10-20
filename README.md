@@ -25,27 +25,48 @@ Full details: [Requirements (SRS)](docs/REQUIREMENTS.md) ·
 
 ## Backend (Phase 5 delivered)
 
-The ASP.NET Core 8 + PostgreSQL backend lives in `backend/`:
+Layered ASP.NET Core 8 solution under `backend/` — regular controllers + CQRS:
+
+```text
+src/ExpenseTracker.Domain            entities, enums, domain rules, numbered SQL migrations
+src/ExpenseTracker.Service           CQRS (MediatR commands/queries + FluentValidation pipeline)
+src/ExpenseTracker.Infrastructure    EF Core + Npgsql (maps to the SQL schema), repositories,
+                                     bcrypt, JWT, SqlMigrationRunner
+src/ExpenseTracker.WebCore           ApiControllerBase, exception→ProblemDetails middleware, auth wiring
+src/ExpenseTracker.Api               the host: AuthController, Program.cs, Dockerfile
+```
 
 ```bash
 # Local stack: API on http://localhost:8080 (Swagger at /swagger), Postgres on :5432
 docker compose -f backend/docker-compose.yml up --build
 
 # Or run with a local .NET 8 SDK
-dotnet run --project backend/src/ExpenseTracker.Api     # http://localhost:5000
+dotnet run --project backend/src/ExpenseTracker.Api
 
-# Tests (unit tests always run; integration tests use Testcontainers/Docker when available)
+# Tests (unit tests always run; integration tests use Testcontainers/Docker or
+# an existing server via EXPENSE_TRACKER_TEST_CONNECTION)
 dotnet test backend/ExpenseTracker.sln
-
-# EF Core migrations
-dotnet tool run dotnet-ef migrations add <Name> \
-  --project backend/src/ExpenseTracker.Api --startup-project backend/src/ExpenseTracker.Api
 ```
 
-Auth flow: `POST /auth/register` (email, password, currency) → `POST /auth/login`
-(JWT access token) → authenticated requests with `Authorization: Bearer <token>`.
-Production configuration comes from environment variables
-(`ConnectionStrings__DefaultConnection`, `Jwt__SigningKey`).
+**SQL migrations** are numbered files in
+`backend/src/ExpenseTracker.Domain/Migrations/` — run them manually in order:
+
+```text
+000_create_schema_migrations.sql   (creates the schema_migrations tracking table)
+001_create_users.sql
+002_create_categories.sql
+003_create_transactions.sql
+```
+
+Track where you are with
+`SELECT version, name, applied_at FROM schema_migrations ORDER BY version;`.
+The API can also apply them itself when `Database:ApplySqlMigrations=true`
+(used by docker-compose; off in production where you run them manually).
+
+Auth flow: `POST /api/auth/register` (email, password, currency) →
+`POST /api/auth/login` (JWT access token) → authenticated requests with
+`Authorization: Bearer <token>`. Production configuration comes from
+environment variables (`ConnectionStrings__DefaultConnection`, `Jwt__SigningKey`).
 
 ## Legacy CLI (delivered, maintenance mode)
 

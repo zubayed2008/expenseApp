@@ -1,11 +1,10 @@
-using System.Text;
-using ExpenseTracker.Api.Data;
-using ExpenseTracker.Api.Endpoints;
-using ExpenseTracker.Api.Options;
-using ExpenseTracker.Api.Services;
-using Microsoft.AspNetCore.Authentication.JwtBearer;
+using ExpenseTracker.Api;
+using ExpenseTracker.Infrastructure;
+using ExpenseTracker.Infrastructure.Migrations;
+using ExpenseTracker.Infrastructure.Persistence;
+using ExpenseTracker.Service;
+using ExpenseTracker.WebCore;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using Serilog;
 
@@ -16,15 +15,8 @@ builder.Host.UseSerilog((context, configuration) => configuration
     .ReadFrom.Configuration(context.Configuration)
     .Enrich.FromLogContext());
 
-// ----- Configuration -----
-builder.Services.Configure<JwtOptions>(builder.Configuration.GetSection(JwtOptions.SectionName));
-
+// ----- Fail fast in production when secrets/config are missing (NFR-013) -----
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
-var jwtOptions = builder.Configuration
-    .GetSection(JwtOptions.SectionName)
-    .Get<JwtOptions>() ?? new JwtOptions();
-
-// Fail fast in production when secrets/config are missing (NFR-013).
 if (builder.Environment.IsProduction())
 {
     if (string.IsNullOrWhiteSpace(connectionString))
@@ -33,41 +25,20 @@ if (builder.Environment.IsProduction())
             "ConnectionStrings:DefaultConnection is required (set ConnectionStrings__DefaultConnection).");
     }
 
-    if (jwtOptions.SigningKey.Length < 32)
+    if ((builder.Configuration["Jwt:SigningKey"] ?? string.Empty).Length < 32)
     {
         throw new InvalidOperationException(
             "Jwt:SigningKey must be at least 32 characters (set Jwt__SigningKey).");
     }
 }
 
-// ----- Database (C-1: EF Core + Npgsql) -----
-builder.Services.AddDbContext<AppDbContext>(options =>
-    options.UseNpgsql(connectionString));
-
-// ----- Application services -----
-builder.Services.AddScoped<AccountService>();
-builder.Services.AddSingleton<JwtTokenService>();
-builder.Services.AddSingleton<IPasswordHasher, BcryptPasswordHasher>();
-
-// ----- Authentication (FR-200/201) -----
+// ----- Layered services -----
 builder.Services
-    .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
-    .AddJwtBearer(options =>
-    {
-        options.MapInboundClaims = false; // keep raw claim names ("sub")
-        options.TokenValidationParameters = new TokenValidationParameters
-        {
-            ValidateIssuer = true,
-            ValidIssuer = jwtOptions.Issuer,
-            ValidateAudience = true,
-            ValidAudience = jwtOptions.Audience,
-            ValidateLifetime = true,
-            ValidateIssuerSigningKey = true,
-            IssuerSigningKey = new SymmetricSecurityKey(
-                Encoding.UTF8.GetBytes(jwtOptions.SigningKey)),
-        };
-    });
-builder.Services.AddAuthorization();
+    .AddInfrastructure(builder.Configuration)   // EF Core + Npgsql, repositories, security
+    .AddApplication()                         // CQRS: MediatR handlers + validators
+    .AddWebCore(builder.Configuration);        // JWT auth + exception middleware
+
+builder.Services.AddControllers();
 
 // ----- OpenAPI / Swagger (FR-228, NFR-051) -----
 builder.Services.AddEndpointsApiExplorer();
@@ -86,7 +57,7 @@ builder.Services.AddSwaggerGen(options =>
         Scheme = "bearer",
         BearerFormat = "JWT",
         In = ParameterLocation.Header,
-        Description = "Paste the access token from POST /auth/login.",
+        Description = "Paste the access token from POST /api/auth/login.",
     });
     options.AddSecurityRequirement(new OpenApiSecurityRequirement
     {
@@ -109,13 +80,13 @@ builder.Services.AddHealthChecks()
 
 var app = builder.Build();
 
-// ----- Migrations on startup (opt-in via Database:MigrateOnStartup) -----
-if (app.Configuration.GetValue<bool>("Database:MigrateOnStartup"))
+// ----- Apply numbered SQL migrations (opt-in; scripts live in ExpenseTracker.Domain) -----
+if (app.Configuration.GetValue<bool>("Database:ApplySqlMigrations"))
 {
     using var scope = app.Services.CreateScope();
-    await scope.ServiceProvider
-        .GetRequiredService<AppDbContext>()
-        .Database.MigrateAsync(app.Lifetime.ApplicationStopping);
+    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    var runner = new SqlMigrationRunner(db);
+    await runner.ApplyAllAsync(app.Lifetime.ApplicationStopping);
 }
 
 app.UseSerilogRequestLogging();
@@ -126,10 +97,12 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
+app.UseWebCore();   // exception -> ProblemDetails middleware
+
 app.UseAuthentication();
 app.UseAuthorization();
 
-app.MapAuthEndpoints();
+app.MapControllers();
 app.MapHealthChecks("/health");
 
 app.Run();

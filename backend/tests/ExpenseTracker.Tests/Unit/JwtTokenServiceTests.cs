@@ -1,9 +1,9 @@
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
-using ExpenseTracker.Api.Models;
-using ExpenseTracker.Api.Options;
-using ExpenseTracker.Api.Services;
+using ExpenseTracker.Domain;
+using ExpenseTracker.Service.Options;
+using ExpenseTracker.Infrastructure.Security;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 

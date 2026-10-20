@@ -1,5 +1,4 @@
-using ExpenseTracker.Api.Models;
-using ExpenseTracker.Api.Services;
+using ExpenseTracker.Domain;
 
 namespace ExpenseTracker.Tests.Unit;
 
