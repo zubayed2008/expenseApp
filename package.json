@@ -1,0 +1,25 @@
+{
+  "name": "expense-tracker",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Zero-dependency CLI expense tracker that stores expenses and income in a human-readable Markdown file.",
+  "main": "src/tracker.js",
+  "bin": {
+    "expense-tracker": "bin/expense-tracker.js"
+  },
+  "scripts": {
+    "start": "node bin/expense-tracker.js",
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "keywords": [
+    "expense-tracker",
+    "budget",
+    "markdown",
+    "cli",
+    "personal-finance"
+  ],
+  "license": "MIT"
+}
